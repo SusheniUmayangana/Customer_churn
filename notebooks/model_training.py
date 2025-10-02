@@ -37,17 +37,20 @@ occupation_map = {
 df['education'] = df['education'].str.strip().str.lower().map(education_map).fillna(df['education'].str.strip().str.lower())
 df['occupation'] = df['occupation'].str.strip().str.lower().map(occupation_map).fillna(df['occupation'].str.strip().str.lower())
 
-# 🔄 Encode categorical columns and save encoders
+# 🔄 Encode categorical columns with 'other' fallback
 label_encoders = {}
 os.makedirs("model", exist_ok=True)
 
 for col in df.select_dtypes(include='object').columns:
     df[col] = df[col].str.strip().str.lower()
+    known_labels = df[col].unique()
+    df[col] = df[col].apply(lambda x: x if x in known_labels else 'other')  # fallback logic
     le = LabelEncoder()
-    df[col] = le.fit_transform(df[col])
+    le.fit(list(known_labels) + ['other'])  # ensure 'other' is included
+    df[col] = le.transform(df[col])
     label_encoders[col] = le
     joblib.dump(le, f"model/le_{col}.pkl")
-    print(f"✅ Saved encoder for: {col}")
+    print(f"✅ Saved encoder for: {col} (includes 'other')")
 
 # 🎯 Split features and target
 X = df.drop('churned', axis=1)
