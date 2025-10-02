@@ -1,0 +1,7 @@
+﻿gender,marital_status,dependents,occupation,income,education,tenure_years,segment,preferred_contact,credit_score,credit_history_years,outstanding_debt,balance,products_count,complaints_count,age
+Male,Married,Yes,tefl teacher,75,Diploma,1,sme,email,400,1,2000000,0,1,5,35
+Female,Single,No,tefl teacher,5000,bachelor,5,retail,phone,436,1,1000,500,1,3,65
+Male,Divorced,Yes,hospital doctor,12000,bachelor,12,sme,email,800,15,5000,15000,4,0,42
+Female,Married,No,fine artist,300,high school,0,Corporate,phone,300,0,1000,10,1,5,31
+Male,Married,Yes,retired,5000,bachelor,10,sme,email,700,12,2500,9000,2,0,40
+Male,Single,No,artist,500,high school,0,retail,phone,300,1,5000,300,1,5,26
