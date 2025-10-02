@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Churn Prediction", layout="wide")
 st.title("📊 Customer Churn Prediction App")
@@ -72,7 +73,7 @@ if st.button("Predict Churn"):
 
     if proba_percent > 0.5:
         st.error("⚠️ This customer is likely to churn.")
-    elif 0.4 < proba_percent <= 5.0:
+    elif 0.4 < proba_percent <= 0.5:
         st.warning("⚠️ This customer shows borderline churn risk.")
     else:
         st.success("✅ This customer is likely to stay.")
@@ -155,10 +156,8 @@ if uploaded_file:
 
     # Combine results
     df_result = df.copy()
-    # Scale probability to percentage
     df_result['Churn_Probability'] = (probabilities * 100).round(2)
 
-    # Apply churn risk messaging
     risk_messages = []
     for proba_percent in df_result['Churn_Probability']:
         if proba_percent > 0.5:
@@ -169,7 +168,7 @@ if uploaded_file:
             risk_messages.append("✅ Likely to stay")
 
     df_result['Risk_Comment'] = risk_messages
-    df_result['Churn_Prediction'] = predictions  # keep binary flag for download
+    df_result['Churn_Prediction'] = predictions
 
     st.success("✅ Predictions generated!")
     st.dataframe(df_result)
@@ -190,3 +189,16 @@ if uploaded_file:
     churn_rate = churn_count / total_count if total_count > 0 else 0
 
     st.metric("Estimated Churn Rate", f"{churn_rate:.2%}", delta=f"{churn_count} likely churners out of {total_count}")
+
+    # ─────────────────────────────────────────────────────────────
+    # 📊 Dashboard Visuals
+    st.subheader("📊 Churn Probability Distribution")
+    fig, ax = plt.subplots(figsize=(5, 2))
+    ax.hist(df_result['Churn_Probability'], bins=10, color='salmon', edgecolor='black')
+    ax.set_xlabel("Churn Probability (%)")
+    ax.set_ylabel("Customer Count")
+    ax.set_title("Distribution of Churn Risk")
+    plt.tight_layout()
+    st.pyplot(fig)
+
+   
