@@ -1,13 +1,10 @@
-# 🔍 Customer Churn Prediction – XGBoost Pipeline (`dev/sushenii`)
+# 🔍 Customer Churn Prediction – XGBoost Pipeline 
 
 This branch contains a modular, reproducible pipeline for predicting customer churn using XGBoost. It includes data preprocessing, model training, evaluation, and a Flask API for serving predictions. Designed for clarity, scalability, and business relevance.
 
 ---
 
 ## 📁 Project Structure
-
-
-dev/sushenii/
 
 ├── app/
 
