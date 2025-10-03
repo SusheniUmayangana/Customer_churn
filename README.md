@@ -85,15 +85,21 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
    ```bash
    pip install -r requirements.txt
 
-3. **Train the model**
+3. **Create your environment file**
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+   Update the values in `.env` (API username, password, and JWT secret) before running local services. These values will also be added to Streamlit Cloud secrets when you deploy.
+
+4. **Train the model**
    ```bash
    python notebooks/model_training.py
    
-4. **Run the dashboard**
+5. **Run the dashboard**
    ```bash
    python -m streamlit run app/app.py
 
-5. **Run tests**
+6. **Run tests**
    ```bash
    pytest tests/
 
