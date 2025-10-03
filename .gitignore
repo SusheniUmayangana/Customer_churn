@@ -16,6 +16,9 @@ venv/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
+# Environment files
+.env
+
 # OS-specific files
 .DS_Store
 Thumbs.db

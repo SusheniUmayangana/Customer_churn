@@ -13,6 +13,9 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
 │
 ├── customer_churn/
 │       ├── __init__.py         # Package marker for imports
+│       ├── auth.py             # JWT helpers and credential management
+│       ├── config.py           # Environment variable loader
+│       ├── database.py         # MongoDB connection utilities
 │       └── preprocessing.py    # Shared preprocessing pipeline
 │
 ├── data/
@@ -42,6 +45,8 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
 ├── requirements.txt           # Dependencies
 └── README.md                  # You're reading it!
 
+└── .env.example               # Sample environment configuration for MongoDB/JWT
+
 │
 
 ---
@@ -59,17 +64,23 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
    pip install -r requirements.txt
    ```
 
-3. **Train or retrain the model**
+3. **Configure environment secrets**
+   ```powershell
+   copy .env.example .env
+   ```
+   Update `.env` with your MongoDB URI, target database name, and a strong `JWT_SECRET`. Ensure the MongoDB instance is reachable before launching the app.
+
+4. **Train or retrain the model (optional)**
    ```powershell
    python scripts/train_model.py
    ```
 
-4. **Run the dashboard**
+5. **Run the dashboard**
    ```powershell
    python -m streamlit run app/app.py
    ```
 
-5. **Run the automated tests**
+6. **Run the automated tests**
    ```powershell
    pytest tests
    ```

@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
+import bcrypt
+import jwt
+from pymongo.collection import Collection
+from pymongo.errors import PyMongoError
+
+from .config import get_settings
+from .database import get_collection
+
+USERS_COLLECTION = "users"
+
+
+def _get_users_collection() -> Collection:
+    collection = get_collection(USERS_COLLECTION)
+    if collection is None:
+        raise RuntimeError("MongoDB connection is not configured. Set MONGO_URI and MONGO_DB_NAME.")
+    return collection
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except ValueError:
+        return False
+
+
+def register_user(email: str, password: str, full_name: Optional[str] = None) -> Dict[str, Any]:
+    email_normalised = email.strip().lower()
+    collection = _get_users_collection()
+
+    existing = collection.find_one({"email": email_normalised})
+    if existing:
+        raise ValueError("A user with this email already exists.")
+
+    user_document = {
+        "email": email_normalised,
+        "password_hash": hash_password(password),
+        "full_name": full_name,
+        "created_at": datetime.utcnow(),
+    }
+
+    result = collection.insert_one(user_document)
+    return {
+        "id": str(result.inserted_id),
+        "email": email_normalised,
+        "full_name": full_name,
+    }
+
+
+def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
+    email_normalised = email.strip().lower()
+    try:
+        collection = _get_users_collection()
+    except RuntimeError:
+        return None
+
+    user = collection.find_one({"email": email_normalised})
+    if not user:
+        return None
+
+    password_hash = user.get("password_hash", "")
+    if not verify_password(password, password_hash):
+        return None
+
+    user_id = user.pop("_id", None)
+    if user_id is not None:
+        user["id"] = str(user_id)
+    user.pop("password_hash", None)
+    return user
+
+
+def create_access_token(user_id: str, email: str) -> str:
+    settings = get_settings()
+    if not settings.jwt_secret:
+        raise RuntimeError("JWT_SECRET must be configured to issue tokens.")
+
+    expires_delta = timedelta(minutes=settings.jwt_expires_minutes)
+    now = datetime.utcnow()
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "iat": now,
+        "exp": now + expires_delta,
+    }
+
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_token(token: str) -> Optional[Dict[str, Any]]:
+    settings = get_settings()
+    if not settings.jwt_secret:
+        return None
+
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return payload
+    except jwt.PyJWTError:
+        return None
+
+
+def get_current_user(token: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not token:
+        return None
+    payload = decode_token(token)
+    if not payload:
+        return None
+
+    try:
+        collection = _get_users_collection()
+    except RuntimeError:
+        return None
+
+    try:
+        user = collection.find_one({"email": payload.get("email")})
+    except PyMongoError:
+        return None
+
+    if not user:
+        return None
+
+    user_id = user.pop("_id", None)
+    if user_id is not None:
+        user["id"] = str(user_id)
+    user.pop("password_hash", None)
+    return user
+
+
+__all__ = [
+    "register_user",
+    "authenticate_user",
+    "create_access_token",
+    "decode_token",
+    "get_current_user",
+]
