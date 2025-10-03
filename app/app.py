@@ -1,207 +1,195 @@
-from pathlib import Path
-
 import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
-from dotenv import load_dotenv
 import streamlit as st
+from typing import Dict, List, Optional
 
-from common.risk import THRESHOLDS, classify_churn_risk
+from customer_churn.preprocessing import ChurnPreprocessor
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(BASE_DIR / ".env")
+
+HIGH_RISK_THRESHOLD = 0.5
+MEDIUM_RISK_THRESHOLD = 0.4
+
+
+@st.cache_resource(show_spinner=False)
+def load_artifacts():
+    preprocessor = ChurnPreprocessor.load("model/preprocessor.joblib")
+    model = joblib.load("model/xgb_churn_model.pkl")
+    return preprocessor, model
+
+
+def format_option(column: str, value: str) -> str:
+    if column == "dependents" and value.isdigit():
+        return value
+    if value in {"other", "unknown"}:
+        return "Unknown / Other"
+    return value.replace("_", " ").title()
+
+
+def select_from_encoder(label: str, column: str, default: Optional[str] = None) -> str:
+    classes = list(PREPROCESSOR.encoders_[column].classes_)
+    display_options = [format_option(column, item) for item in classes]
+    index = classes.index(default) if default in classes else 0
+    chosen_display = st.selectbox(label, display_options, index=index)
+    return classes[display_options.index(chosen_display)]
+
+
+def derive_risk_message(probability: float) -> str:
+    if probability >= HIGH_RISK_THRESHOLD:
+        return "⚠️ Likely to churn"
+    if probability >= MEDIUM_RISK_THRESHOLD:
+        return "⚠️ Borderline churn risk"
+    return "✅ Likely to stay"
+
+
+def show_unknowns(metadata: Dict[str, List[str]]) -> None:
+    if not metadata:
+        return
+    with st.expander("🔍 Labels mapped to 'other'"):
+        for column, values in metadata.items():
+            st.write(f"**{column}** → {values}")
+
 
 st.set_page_config(page_title="Churn Prediction", layout="wide")
 st.title("📊 Customer Churn Prediction App")
 
-# Load encoders
-marital_le = joblib.load(BASE_DIR / "model" / "le_marital_status.pkl")
-education_le = joblib.load(BASE_DIR / "model" / "le_education.pkl")
-occupation_le = joblib.load(BASE_DIR / "model" / "le_occupation.pkl")
-segment_le = joblib.load(BASE_DIR / "model" / "le_segment.pkl")
-contact_le = joblib.load(BASE_DIR / "model" / "le_preferred_contact.pkl")
+PREPROCESSOR, MODEL = load_artifacts()
+REQUIRED_COLUMNS = list(PREPROCESSOR.categorical_columns) + list(PREPROCESSOR.numeric_columns)
 
-encoders = {
-    'marital_status': marital_le,
-    'education': education_le,
-    'occupation': occupation_le,
-    'segment': segment_le,
-    'preferred_contact': contact_le
-}
-
-# Load model
-xgb_model = joblib.load(BASE_DIR / "model" / "xgb_churn_model.pkl")
-
-
-def display_risk_message(probability: float) -> None:
-    """Show the appropriate Streamlit alert for the computed probability."""
-
-    message = classify_churn_risk(probability)
-    if probability > THRESHOLDS.high_risk:
-        st.error(message)
-    elif probability > THRESHOLDS.borderline:
-        st.warning(message)
-    else:
-        st.success(message)
 
 # ─────────────────────────────────────────────────────────────
 # 🔍 Single Customer Prediction
 st.header("🔍 Predict Churn for a Single Customer")
 
-gender = st.selectbox("Gender", ["Male", "Female"])
-marital_status = st.selectbox("Marital Status", sorted([x.capitalize() for x in marital_le.classes_]))
-dependents = st.selectbox("Has Dependents", ["Yes", "No"])
-occupation = st.selectbox("Occupation", sorted([x.capitalize() for x in occupation_le.classes_]))
-income = st.number_input("Monthly Income", min_value=0.0, value=5000.0)
-education = st.selectbox("Education Level", sorted([x.capitalize() for x in education_le.classes_]))
-tenure_years = st.slider("Tenure (Years)", 0, 30, 5)
-segment = st.selectbox("Customer Segment", sorted([x.capitalize() for x in segment_le.classes_]))
-preferred_contact = st.selectbox("Preferred Contact", sorted([x.upper() for x in contact_le.classes_]))
+gender = select_from_encoder("Gender", "gender", default="female")
+marital_status = select_from_encoder("Marital Status", "marital_status", default="married")
+dependents = select_from_encoder("Number of Dependents", "dependents", default="0")
+occupation = select_from_encoder("Occupation", "occupation")
+education = select_from_encoder("Education Level", "education")
+segment = select_from_encoder("Customer Segment", "segment")
+preferred_contact = select_from_encoder("Preferred Contact", "preferred_contact")
+
+income = st.number_input("Annual Income (USD)", min_value=0.0, value=60000.0, step=1000.0)
+tenure_years = st.slider("Tenure (Years)", 0, 40, 5)
 credit_score = st.slider("Credit Score", 300, 850, 650)
-credit_history_years = st.slider("Credit History (Years)", 0, 30, 5)
-outstanding_debt = st.number_input("Outstanding Debt", min_value=0.0, value=1000.0)
-balance = st.number_input("Account Balance", min_value=0.0, value=5000.0)
+credit_history_years = st.slider("Credit History (Years)", 0, 40, 5)
+outstanding_debt = st.number_input("Outstanding Debt (USD)", min_value=0.0, value=5000.0, step=500.0)
+balance = st.number_input("Account Balance (USD)", min_value=0.0, value=10000.0, step=500.0)
 products_count = st.slider("Products Count", 1, 10, 2)
-complaints_count = st.slider("Complaints Count", 0, 5, 0)
+complaints_count = st.slider("Complaints Count", 0, 10, 0)
 age = st.slider("Age", 18, 100, 35)
 
-input_df = pd.DataFrame({
-    'gender': [1 if gender.lower() == "male" else 0],
-    'marital_status': [marital_le.transform([marital_status.lower().strip()])[0]],
-    'dependents': [1 if dependents.lower() == "yes" else 0],
-    'occupation': [occupation_le.transform([occupation.lower().strip()])[0]],
-    'income': [income],
-    'education': [education_le.transform([education.lower().strip()])[0]],
-    'tenure_years': [tenure_years],
-    'segment': [segment_le.transform([segment.lower().strip()])[0]],
-    'preferred_contact': [contact_le.transform([preferred_contact.lower().strip()])[0]],
-    'credit_score': [credit_score],
-    'credit_history_years': [credit_history_years],
-    'outstanding_debt': [outstanding_debt],
-    'balance': [balance],
-    'products_count': [products_count],
-    'complaints_count': [complaints_count],
-    'age': [age]
-})
+single_record = pd.DataFrame(
+    [
+        {
+            "gender": gender,
+            "marital_status": marital_status,
+            "dependents": dependents,
+            "occupation": occupation,
+            "income": income,
+            "education": education,
+            "tenure_years": tenure_years,
+            "segment": segment,
+            "preferred_contact": preferred_contact,
+            "credit_score": credit_score,
+            "credit_history_years": credit_history_years,
+            "outstanding_debt": outstanding_debt,
+            "balance": balance,
+            "products_count": products_count,
+            "complaints_count": complaints_count,
+            "age": age,
+        }
+    ]
+)
 
 if st.button("Predict Churn"):
-    prediction = int(xgb_model.predict(input_df)[0])
-    proba = float(xgb_model.predict_proba(input_df)[0][1])
-    st.write(f"🔢 Churn Probability: {proba * 100:.2f}%")
-    display_risk_message(proba)
+    processed_single, unknown_meta = PREPROCESSOR.transform(single_record, track_unknowns=True)
+    show_unknowns(unknown_meta)
+
+    probability = MODEL.predict_proba(processed_single)[0][1]
+    probability_percent = probability * 100
+
+    st.write(f"🔢 Churn Probability: {probability_percent:.2f}%")
+
+    risk_message = derive_risk_message(probability)
+    if probability >= HIGH_RISK_THRESHOLD:
+        st.error(risk_message)
+    elif probability >= MEDIUM_RISK_THRESHOLD:
+        st.warning(risk_message)
+    else:
+        st.success(risk_message)
+
 
 # ─────────────────────────────────────────────────────────────
 # 📤 Batch Prediction
 st.header("📤 Batch Churn Prediction")
 
-st.markdown("""
+st.markdown(
+    """
 **Instructions:**
 - Download the template CSV below
 - Fill in customer data using the same column names
 - Upload the completed file to generate churn predictions
-""")
+"""
+)
 
-# Provide template CSV
-template_df = pd.DataFrame(columns=[
-    'gender', 'marital_status', 'dependents', 'occupation', 'income',
-    'education', 'tenure_years', 'segment', 'preferred_contact',
-    'credit_score', 'credit_history_years', 'outstanding_debt',
-    'balance', 'products_count', 'complaints_count', 'age'
-])
-
-template_csv = template_df.to_csv(index=False).encode('utf-8')
+template_df = pd.DataFrame(columns=REQUIRED_COLUMNS)
 st.download_button(
     label="📄 Download Template CSV",
-    data=template_csv,
+    data=template_df.to_csv(index=False).encode("utf-8"),
     file_name="churn_template.csv",
-    mime="text/csv"
+    mime="text/csv",
 )
 
 uploaded_file = st.file_uploader("Upload completed customer data CSV", type=["csv"])
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+if uploaded_file is not None:
+    raw_batch = pd.read_csv(uploaded_file)
+    raw_batch.columns = [col.strip().lower() for col in raw_batch.columns]
 
-    # Validate columns
-    required_cols = template_df.columns.tolist()
-    missing = [col for col in required_cols if col not in df.columns]
+    missing = [col for col in REQUIRED_COLUMNS if col not in raw_batch.columns]
     if missing:
         st.error(f"❌ Missing columns: {missing}")
         st.stop()
 
-    # Normalize text columns
-    for col in df.select_dtypes(include='object').columns:
-        df[col] = df[col].str.strip().str.lower()
+    processed_batch, unknown_meta = PREPROCESSOR.transform(raw_batch, track_unknowns=True)
+    show_unknowns(unknown_meta)
 
-    # Map binary columns
-    df['gender'] = df['gender'].map({'male': 1, 'female': 0})
-    df['dependents'] = df['dependents'].map({'yes': 1, 'no': 0})
+    probabilities = MODEL.predict_proba(processed_batch)[:, 1]
+    predictions = MODEL.predict(processed_batch)
 
-    # Map unknown labels to 'other' and log them
-    mapped_summary = {}
-    for col in encoders:
-        known_classes = set(encoders[col].classes_)
-        mapped_summary[col] = sorted(set(df[col].dropna()) - known_classes)
-        df[col] = df[col].apply(lambda x: x if x in known_classes else 'other')
-        df[col] = encoders[col].transform(df[col])
-
-    # Show mapping summary
-    with st.expander("🔍 Labels Mapped to 'Other'"):
-        for col, unknowns in mapped_summary.items():
-            if unknowns:
-                st.write(f"**{col}**: {unknowns} → mapped to 'other'")
-
-    # Convert numeric columns to proper types
-    numeric_cols = [
-        'income', 'tenure_years', 'credit_score', 'credit_history_years',
-        'outstanding_debt', 'balance', 'products_count',
-        'complaints_count', 'age'
-    ]
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    df = df.dropna(subset=numeric_cols)
-
-    # Predict churn
-    predictions = xgb_model.predict(df)
-    probabilities = xgb_model.predict_proba(df)[:, 1]
-
-    # Combine results
-    df_result = df.copy()
-    df_result['Churn_Prediction'] = predictions
-    df_result['Churn_Probability'] = probabilities.round(4)
-    df_result['Churn_Probability_Percent'] = (df_result['Churn_Probability'] * 100).round(2)
-    df_result['Risk_Comment'] = [classify_churn_risk(float(p)) for p in probabilities]
+    results = raw_batch.copy()
+    results["churn_probability"] = (probabilities * 100).round(2)
+    results["churn_prediction"] = predictions
+    results["risk_comment"] = [derive_risk_message(prob) for prob in probabilities]
 
     st.success("✅ Predictions generated!")
-    st.dataframe(df_result)
+    st.dataframe(results)
 
-    # Download button
-    csv = df_result.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Predictions as CSV",
-        data=csv,
+        data=results.to_csv(index=False).encode("utf-8"),
         file_name="churn_predictions.csv",
-        mime="text/csv"
+        mime="text/csv",
     )
 
-    # Recalculate churners based on probability threshold
-    churn_threshold = THRESHOLDS.high_risk
-    churn_count = (df_result['Churn_Probability'] > churn_threshold).sum()
-    total_count = len(df_result)
+    churn_count = (probabilities >= HIGH_RISK_THRESHOLD).sum()
+    total_count = len(results)
     churn_rate = churn_count / total_count if total_count > 0 else 0
+    st.metric(
+        "Estimated Churn Rate",
+        f"{churn_rate:.2%}",
+        delta=f"{int(churn_count)} likely churners out of {total_count}",
+    )
 
-    st.metric("Estimated Churn Rate", f"{churn_rate:.2%}", delta=f"{churn_count} likely churners out of {total_count}")
-
-    # ─────────────────────────────────────────────────────────────
-    # 📊 Dashboard Visuals
     st.subheader("📊 Churn Probability Distribution")
     fig, ax = plt.subplots(figsize=(5, 2))
-    ax.hist(df_result['Churn_Probability_Percent'], bins=10, color='salmon', edgecolor='black')
+    ax.hist(results["churn_probability"], bins=10, color="salmon", edgecolor="black")
     ax.set_xlabel("Churn Probability (%)")
     ax.set_ylabel("Customer Count")
     ax.set_title("Distribution of Churn Risk")
     plt.tight_layout()
     st.pyplot(fig)
+
 
    

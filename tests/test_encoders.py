@@ -1,6 +1,8 @@
-import joblib
+from customer_churn.preprocessing import ChurnPreprocessor
+
 
 def test_encoder_classes():
-    occupation_le = joblib.load("model/le_occupation.pkl")
-    assert "other" in occupation_le.classes_, "'other' label missing from encoder"
-    assert len(occupation_le.classes_) > 1, "Encoder has too few classes"
+    preprocessor = ChurnPreprocessor.load("model/preprocessor.joblib")
+    for column, encoder in preprocessor.encoders_.items():
+        assert "other" in encoder.classes_, f"'other' label missing from encoder for {column}"
+        assert len(encoder.classes_) > 1, f"Encoder for {column} has too few classes"
