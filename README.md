@@ -108,6 +108,8 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
 - ✅ Formal testing with pytest
 - ✅ Clean, reproducible pipeline and modular design
 
+---
+
 ## 🚀 Future Enhancements
 - RESTful API with FastAPI
 - Docker packaging and cloud deployment
