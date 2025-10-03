@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -50,6 +50,24 @@ def get_collection(name: str) -> Optional[Collection]:
     return database[name]
 
 
+def fetch_user_predictions(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    collection = get_collection("predictions")
+    if collection is None:
+        return []
+
+    try:
+        cursor = collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        documents: List[Dict[str, Any]] = []
+        for document in cursor:
+            mongo_id = document.get("_id")
+            if mongo_id is not None:
+                document["_id"] = str(mongo_id)
+            documents.append(document)
+        return documents
+    except PyMongoError:
+        return []
+
+
 def close_client() -> None:
     global _client
     if _client is not None:
@@ -57,4 +75,4 @@ def close_client() -> None:
         _client = None
 
 
-__all__ = ["get_client", "get_database", "get_collection", "close_client"]
+__all__ = ["get_client", "get_database", "get_collection", "fetch_user_predictions", "close_client"]

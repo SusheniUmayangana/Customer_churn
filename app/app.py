@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from itertools import cycle
 from typing import Any, Dict, List, Optional
 
@@ -15,7 +15,7 @@ from customer_churn.auth import (
     get_current_user,
     register_user,
 )
-from customer_churn.database import get_collection
+from customer_churn.database import fetch_user_predictions, get_collection
 from customer_churn.preprocessing import ChurnPreprocessor
 
 try:
@@ -35,6 +35,7 @@ BRAND_BACKGROUND = "linear-gradient(120deg, rgba(17,75,139,0.92), rgba(14,114,14
 
 PREDICTIONS_COLLECTION = "predictions"
 TOKEN_QUERY_PARAM = "auth_token"
+PAID_PLANS = {"pro", "paid", "enterprise"}
 
 
 def rerun_app() -> None:
@@ -46,6 +47,15 @@ def rerun_app() -> None:
         st.experimental_rerun()
     else:  # pragma: no cover - defensive guard for future API changes
         raise RuntimeError("Streamlit rerun functionality is unavailable; refresh the page manually.")
+
+
+def create_default_dashboard_stats() -> Dict[str, Any]:
+    return {
+        "total_customers": 0,
+        "total_high_risk": 0,
+        "estimated_churn_rate": 0.0,
+        "revenue_at_risk": 0.0,
+    }
 
 
 def _get_query_token() -> Optional[str]:
@@ -88,12 +98,88 @@ def persist_auth_state(token: str, user: Dict[str, Any]) -> None:
     st.session_state["auth_token"] = token
     st.session_state["current_user"] = user
     _set_query_token(token)
+    load_user_history()
 
 
 def clear_auth_state() -> None:
     st.session_state["auth_token"] = None
     st.session_state["current_user"] = None
     _set_query_token(None)
+
+
+def user_has_recommendation_access(user: Optional[Dict[str, Any]]) -> bool:
+    if not user:
+        return False
+    return (user.get("plan") or "free").lower() in PAID_PLANS
+
+
+def rebuild_dashboard_stats_from_history(documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    stats = create_default_dashboard_stats()
+
+    for document in documents:
+        doc_type = document.get("type")
+        stats["revenue_at_risk"] += float(document.get("revenue_at_risk") or 0.0)
+
+        if doc_type == "batch":
+            summary = document.get("summary") or {}
+            stats["total_customers"] += int(summary.get("records", 0))
+            risk_counts = summary.get("risk_counts") or {}
+            stats["total_high_risk"] += int(risk_counts.get("High", 0))
+        else:
+            stats["total_customers"] += 1
+            if document.get("risk_tier") == "High":
+                stats["total_high_risk"] += 1
+
+    if stats["total_customers"]:
+        stats["estimated_churn_rate"] = stats["total_high_risk"] / stats["total_customers"]
+    return stats
+
+
+def normalise_history_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    for document in documents:
+        created_at = document.get("created_at")
+        if isinstance(created_at, datetime):
+            created_display = created_at.strftime("%Y-%m-%d %H:%M")
+        else:
+            created_display = "Unknown"
+
+        probability = document.get("probability")
+        probability = float(probability) if probability is not None else None
+
+        entry = {
+            "id": document.get("_id"),
+            "type": document.get("type", "single"),
+            "created_at": created_at,
+            "created_at_display": created_display,
+            "probability": probability,
+            "risk_tier": document.get("risk_tier"),
+            "revenue_at_risk": float(document.get("revenue_at_risk") or 0.0),
+            "inputs": document.get("inputs") or {},
+            "summary": document.get("summary") or {},
+            "sample": document.get("sample") or [],
+        }
+        entries.append(entry)
+    return entries
+
+
+def load_user_history(sync_stats: bool = True) -> None:
+    user = st.session_state.get("current_user")
+    if not user:
+        return
+
+    user_id = user.get("id")
+    if not user_id:
+        return
+
+    documents = fetch_user_predictions(user_id)
+    if sync_stats:
+        if documents:
+            st.session_state["dashboard_stats"] = rebuild_dashboard_stats_from_history(documents)
+        else:
+            st.session_state["dashboard_stats"] = create_default_dashboard_stats()
+
+    st.session_state["prediction_history"] = normalise_history_documents(documents)
 
 
 FIELD_GROUPS: List[Dict[str, Any]] = [
@@ -508,16 +594,12 @@ def estimate_revenue_at_risk(df: pd.DataFrame) -> float:
 
 
 def reset_user_state() -> None:
-    st.session_state["dashboard_stats"] = {
-        "total_customers": 0,
-        "total_high_risk": 0,
-        "estimated_churn_rate": 0.0,
-        "revenue_at_risk": 0.0,
-    }
+    st.session_state["dashboard_stats"] = create_default_dashboard_stats()
     st.session_state["client_notes"] = ""
     st.session_state["last_prediction"] = None
     st.session_state["batch_results"] = None
     st.session_state["last_results_for_report"] = None
+    st.session_state["prediction_history"] = []
 
 
 def ensure_session_state() -> None:
@@ -528,6 +610,7 @@ def ensure_session_state() -> None:
         st.session_state.setdefault("last_prediction", None)
         st.session_state.setdefault("batch_results", None)
         st.session_state.setdefault("last_results_for_report", None)
+        st.session_state.setdefault("prediction_history", [])
 
     st.session_state.setdefault("auth_token", None)
     st.session_state.setdefault("current_user", None)
@@ -545,9 +628,12 @@ def initialise_auth_state() -> None:
         resolved_user = get_current_user(token)
         if resolved_user:
             st.session_state["current_user"] = resolved_user
+            load_user_history()
         else:
             clear_auth_state()
             reset_user_state()
+    elif token and st.session_state.get("current_user") and not st.session_state.get("prediction_history"):
+        load_user_history()
 
 
 def sign_out() -> None:
@@ -565,8 +651,16 @@ def render_account_sidebar() -> None:
         display_name = user.get("full_name") or user.get("email", "")
         st.markdown(f"### 👋 {display_name}")
         st.caption(user.get("email", ""))
+        plan = (user.get("plan") or "free").title()
+        badge_color = "#F2B632" if plan.lower() in PAID_PLANS else "#d9d9d9"
+        st.markdown(
+            f"<span style='background:{badge_color}; color:#114B8B; padding:0.2rem 0.6rem; border-radius:999px; font-weight:600;'>Plan: {plan}</span>",
+            unsafe_allow_html=True,
+        )
+        if plan.lower() not in PAID_PLANS:
+            st.button("Upgrade to Pro", type="primary", key="cta_upgrade_sidebar")
         st.divider()
-        if st.button("Sign out", use_container_width=True):
+        if st.button("Sign out", width="stretch"):
             sign_out()
 
 
@@ -593,7 +687,7 @@ def render_authentication_gate() -> bool:
         with st.form("login_form"):
             email = st.text_input("Email address", key="login_email")
             password = st.text_input("Password", type="password", key="login_password")
-            submit_login = st.form_submit_button("Sign in", use_container_width=True)
+            submit_login = st.form_submit_button("Sign in", width="stretch")
 
         if submit_login:
             try:
@@ -605,8 +699,8 @@ def render_authentication_gate() -> bool:
                     st.error("Invalid email or password.")
                 else:
                     token = create_access_token(user["id"], user.get("email", ""))
-                    persist_auth_state(token, user)
                     reset_user_state()
+                    persist_auth_state(token, user)
                     st.success("Welcome back! Redirecting...")
                     rerun_app()
 
@@ -621,7 +715,19 @@ def render_authentication_gate() -> bool:
                 type="password",
                 key="register_confirm_password",
             )
-            submit_register = st.form_submit_button("Create account", use_container_width=True)
+            plan_label_to_code = {
+                "Free (recommendations locked)": "free",
+                "Pro (full recommendations)": "pro",
+            }
+            plan_choice_label = st.radio(
+                "Select plan",
+                list(plan_label_to_code.keys()),
+                horizontal=True,
+                key="register_plan",
+                help="Select a plan to provision this account. Pro unlocks full recommendations.",
+            )
+            plan_choice = plan_label_to_code[plan_choice_label]
+            submit_register = st.form_submit_button("Create account", width="stretch")
 
         if submit_register:
             if password != confirm_password:
@@ -630,15 +736,15 @@ def render_authentication_gate() -> bool:
                 st.error("Password must be at least 8 characters long.")
             else:
                 try:
-                    user = register_user(email, password, full_name=full_name or None)
+                    user = register_user(email, password, full_name=full_name or None, plan=plan_choice)
                     token = create_access_token(user["id"], user.get("email", ""))
                 except ValueError as exc:
                     st.error(str(exc))
                 except RuntimeError as exc:
                     st.error(str(exc))
                 else:
-                    persist_auth_state(token, user)
                     reset_user_state()
+                    persist_auth_state(token, user)
                     st.success("Account created successfully! Redirecting...")
                     rerun_app()
 
@@ -755,7 +861,7 @@ def render_segment_charts(results: pd.DataFrame) -> None:
             title="Churn probability by segment",
         )
         fig_segment.update_layout(legend_title_text="Risk tier")
-        st.plotly_chart(fig_segment, use_container_width=True)
+    st.plotly_chart(fig_segment, width="stretch")
 
     with col2:
         results["tenure_bucket"] = pd.cut(
@@ -771,7 +877,7 @@ def render_segment_charts(results: pd.DataFrame) -> None:
             title="Churn risk by tenure cohort",
             labels={"tenure_bucket": "Tenure cohort", "count": "Customers"},
         )
-        st.plotly_chart(fig_tenure, use_container_width=True)
+    st.plotly_chart(fig_tenure, width="stretch")
 
     fig_scatter = px.scatter(
         results,
@@ -783,7 +889,15 @@ def render_segment_charts(results: pd.DataFrame) -> None:
         title="Complaints vs churn probability",
         hover_data=["segment", "credit_score"],
     )
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    st.plotly_chart(fig_scatter, width="stretch")
+
+
+def render_upgrade_prompt(feature_label: str) -> None:
+    st.info(
+        f"🔒 {feature_label} is included with Pro plans. Upgrade to unlock tailored recommendations, advanced playbooks, and executive-ready insights.",
+    )
+    button_key = f"upgrade_{feature_label.replace(' ', '_').lower()}"
+    st.button("Explore plans", key=button_key, type="secondary")
 
 
 def render_risk_tables(results: pd.DataFrame) -> None:
@@ -824,13 +938,21 @@ def render_risk_tables(results: pd.DataFrame) -> None:
             }
         ]
     )
-    st.dataframe(styled, use_container_width=True)
+    st.dataframe(styled, width="stretch")
 
 
 def log_single_prediction_entry(user: Dict[str, Any], inputs: Dict[str, Any], probability: float, risk_tier: str) -> None:
     collection = get_collection(PREDICTIONS_COLLECTION)
     if collection is None:
         return
+
+    balance_value = inputs.get("balance")
+    try:
+        balance_numeric = float(balance_value) if balance_value is not None else DEFAULT_CUSTOMER_VALUE
+    except (TypeError, ValueError):
+        balance_numeric = DEFAULT_CUSTOMER_VALUE
+
+    revenue_at_risk = balance_numeric * AVERAGE_BALANCE_RISK_FACTOR if probability >= MEDIUM_RISK_THRESHOLD else 0.0
 
     document = {
         "user_id": user.get("id"),
@@ -839,13 +961,16 @@ def log_single_prediction_entry(user: Dict[str, Any], inputs: Dict[str, Any], pr
         "probability": float(probability),
         "risk_tier": risk_tier,
         "inputs": inputs,
-        "created_at": datetime.utcnow(),
+        "revenue_at_risk": float(revenue_at_risk),
+        "created_at": datetime.now(UTC),
     }
 
     try:
         collection.insert_one(document)
     except PyMongoError:
         pass
+    else:
+        load_user_history()
 
 
 def log_batch_prediction_entry(user: Dict[str, Any], results: pd.DataFrame) -> None:
@@ -864,19 +989,24 @@ def log_batch_prediction_entry(user: Dict[str, Any], results: pd.DataFrame) -> N
     }
     sample_records = results.head(25).to_dict("records")
 
+    revenue_at_risk = float(estimate_revenue_at_risk(results))
+
     document = {
         "user_id": user.get("id"),
         "email": user.get("email"),
         "type": "batch",
         "summary": summary,
         "sample": sample_records,
-        "created_at": datetime.utcnow(),
+        "revenue_at_risk": revenue_at_risk,
+        "created_at": datetime.now(UTC),
     }
 
     try:
         collection.insert_one(document)
     except PyMongoError:
         pass
+    else:
+        load_user_history()
 
 
 def get_model_metadata() -> Dict[str, str]:
@@ -1004,8 +1134,12 @@ def render_single_prediction_tab() -> pd.DataFrame:
     else:
         st.success(risk_message)
 
+    user = st.session_state.get("current_user")
     recommendations = generate_recommendations(single_record.iloc[0].to_dict(), probability)
-    render_insight_cards(recommendations)
+    if user_has_recommendation_access(user):
+        render_insight_cards(recommendations)
+    else:
+        render_upgrade_prompt("Personalized recommendations")
 
     results = single_record.copy()
     results["probability"] = probability
@@ -1071,7 +1205,7 @@ def render_batch_tab(required_columns: List[str]) -> pd.DataFrame:
     results["risk_tier"] = results["probability"].apply(categorize_risk)
 
     st.success("✅ Predictions generated!")
-    st.dataframe(results, use_container_width=True)
+    st.dataframe(results, width="stretch")
 
     st.download_button(
         label="📥 Download Predictions as CSV",
@@ -1122,8 +1256,133 @@ def render_simulator_tab() -> None:
         probability = MODEL.predict_proba(processed)[0][1]
         st.metric("Scenario churn probability", f"{probability*100:.2f}%")
         st.text(derive_risk_message(probability))
+        user = st.session_state.get("current_user")
         recommendations = generate_recommendations(base_values, probability)
-        render_insight_cards(recommendations)
+        if user_has_recommendation_access(user):
+            render_insight_cards(recommendations)
+        else:
+            render_upgrade_prompt("Scenario recommendations")
+
+
+def render_history_tab() -> None:
+    history: List[Dict[str, Any]] = st.session_state.get("prediction_history", [])
+    if not history:
+        st.info("No predictions logged yet. Run a single or batch prediction to build history.")
+        return
+
+    singles = [entry for entry in history if entry.get("type") == "single"]
+    batches = [entry for entry in history if entry.get("type") == "batch"]
+
+    st.subheader("Single predictions")
+    if singles:
+        single_table = []
+        for entry in singles:
+            probability = entry.get("probability")
+            inputs = entry.get("inputs", {})
+            customer_label = (
+                inputs.get("customer_id")
+                or inputs.get("customer_name")
+                or inputs.get("account_id")
+                or inputs.get("email")
+            )
+            if not customer_label:
+                segment = inputs.get("segment") or "—"
+                age = inputs.get("age")
+                customer_label = f"{segment} · Age {age}" if age is not None else segment
+
+            balance_value = inputs.get("balance")
+            try:
+                balance_numeric = float(balance_value) if balance_value is not None else None
+            except (TypeError, ValueError):
+                balance_numeric = None
+
+            single_table.append(
+                {
+                    "Timestamp": entry.get("created_at_display"),
+                    "Risk tier": entry.get("risk_tier", "-"),
+                    "Probability (%)": probability * 100 if probability is not None else None,
+                    "Revenue at risk ($)": entry.get("revenue_at_risk", 0.0),
+                    "Customer": customer_label,
+                    "Segment": inputs.get("segment", "—"),
+                    "Age": inputs.get("age"),
+                    "Tenure (yrs)": inputs.get("tenure_years"),
+                    "Products": inputs.get("products_count"),
+                    "Balance ($)": balance_numeric,
+                    "Complaints": inputs.get("complaints_count"),
+                    "Credit score": inputs.get("credit_score"),
+                }
+            )
+
+        single_df = pd.DataFrame(single_table)
+        st.dataframe(
+            single_df.style.format(
+                {
+                    "Probability (%)": "{:.1f}",
+                    "Revenue at risk ($)": "${:,.0f}",
+                    "Balance ($)": "${:,.0f}",
+                }
+            ),
+            width="stretch",
+        )
+
+        st.download_button(
+            "Download single prediction history",
+            data=single_df.to_csv(index=False).encode("utf-8"),
+            file_name="single_prediction_history.csv",
+            mime="text/csv",
+            width="stretch",
+        )
+
+        with st.expander("View input details", expanded=False):
+            for entry in singles[:25]:
+                st.markdown(f"**{entry.get('created_at_display')} • {entry.get('risk_tier', '-') }**")
+                st.json(entry.get("inputs", {}))
+    else:
+        st.caption("No single predictions recorded yet.")
+
+    st.divider()
+    st.subheader("Batch predictions")
+
+    if batches:
+        batch_table = []
+        for entry in batches:
+            summary = entry.get("summary", {})
+            risk_counts = summary.get("risk_counts", {})
+            batch_table.append(
+                {
+                    "Timestamp": entry.get("created_at_display"),
+                    "Records": summary.get("records", 0),
+                    "High risk": risk_counts.get("High", 0),
+                    "Avg probability (%)": summary.get("average_probability", 0.0) * 100,
+                    "Revenue at risk ($)": entry.get("revenue_at_risk", 0.0),
+                    "High risk share": risk_counts.get("High", 0) / summary.get("records", 1) if summary.get("records") else 0,
+                }
+            )
+
+        batch_df = pd.DataFrame(batch_table)
+        st.dataframe(batch_df.style.format({
+            "Avg probability (%)": "{:.1f}",
+            "Revenue at risk ($)": "${:,.0f}",
+            "High risk share": "{:.0%}",
+        }), width="stretch")
+
+        st.download_button(
+            "Download batch prediction history",
+            data=batch_df.to_csv(index=False).encode("utf-8"),
+            file_name="batch_prediction_history.csv",
+            mime="text/csv",
+            width="stretch",
+        )
+
+        with st.expander("View batch samples", expanded=False):
+            for entry in batches[:10]:
+                st.markdown(f"**{entry.get('created_at_display')} • {entry.get('summary', {}).get('records', 0)} records**")
+                sample_records = entry.get("summary", {}).get("risk_counts", {})
+                st.write("Risk distribution", sample_records)
+                if entry.get("sample"):
+                    st.json(entry.get("sample"))
+    else:
+        st.caption("No batch predictions recorded yet.")
 
 
 def main() -> None:
@@ -1143,10 +1402,11 @@ def main() -> None:
 
     render_hero()
 
-    single_tab, batch_tab, simulator_tab = st.tabs([
+    single_tab, batch_tab, simulator_tab, history_tab = st.tabs([
         "Single Prediction",
         "Batch Insights",
         "What-if Simulator",
+        "History",
     ])
 
     with single_tab:
@@ -1157,6 +1417,9 @@ def main() -> None:
 
     with simulator_tab:
         render_simulator_tab()
+
+    with history_tab:
+        render_history_tab()
 
     latest_results = st.session_state.get("last_results_for_report")
     render_user_management(latest_results if isinstance(latest_results, pd.DataFrame) else None)

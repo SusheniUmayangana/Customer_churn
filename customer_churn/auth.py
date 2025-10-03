@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
 import bcrypt
@@ -32,8 +32,9 @@ def verify_password(password: str, hashed_password: str) -> bool:
         return False
 
 
-def register_user(email: str, password: str, full_name: Optional[str] = None) -> Dict[str, Any]:
+def register_user(email: str, password: str, full_name: Optional[str] = None, plan: Optional[str] = None) -> Dict[str, Any]:
     email_normalised = email.strip().lower()
+    plan_normalised = (plan or "free").strip().lower()
     collection = _get_users_collection()
 
     existing = collection.find_one({"email": email_normalised})
@@ -44,7 +45,8 @@ def register_user(email: str, password: str, full_name: Optional[str] = None) ->
         "email": email_normalised,
         "password_hash": hash_password(password),
         "full_name": full_name,
-        "created_at": datetime.utcnow(),
+        "plan": plan_normalised,
+    "created_at": datetime.now(UTC),
     }
 
     result = collection.insert_one(user_document)
@@ -52,6 +54,7 @@ def register_user(email: str, password: str, full_name: Optional[str] = None) ->
         "id": str(result.inserted_id),
         "email": email_normalised,
         "full_name": full_name,
+        "plan": plan_normalised,
     }
 
 
@@ -83,7 +86,7 @@ def create_access_token(user_id: str, email: str) -> str:
         raise RuntimeError("JWT_SECRET must be configured to issue tokens.")
 
     expires_delta = timedelta(minutes=settings.jwt_expires_minutes)
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "email": email,
