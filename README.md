@@ -108,12 +108,6 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
 - ✅ Formal testing with pytest
 - ✅ Clean, reproducible pipeline and modular design
 
-
-## 🚀 Live Dashboard
-This dashboard supports single and batch predictions, displays churn probabilities with risk comments, and includes segment-wise KPIs for stakeholder insights.
-
-https://customerchurn-zvnievpx3exkuutjlcy4g6.streamlit.app/
-
 ---
 
 ## 🚀 Future Enhancements
