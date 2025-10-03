@@ -2,7 +2,7 @@ import pandas as pd
 import joblib
 
 def test_batch_prediction_pipeline():
-    model = joblib.load("model/xgb_churn_model.pkl")
+    model = joblib.load("model/rf_churn_model.pkl")
     df = pd.read_csv("data/test_batch.csv")
 
     # Normalize text columns

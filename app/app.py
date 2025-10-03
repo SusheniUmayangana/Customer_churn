@@ -1,10 +1,30 @@
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Churn Prediction", layout="wide")
 st.title("📊 Customer Churn Prediction App")
+st.caption("Crafted and maintained by Heshan")
+
+st.sidebar.title("About this tool")
+st.sidebar.success(
+    "Estimate churn risk for individual customers or entire portfolios."
+)
+st.sidebar.markdown(
+    """
+    **Maintainer:** Heshan  
+    **Model:** Random Forest classifier tuned for balanced churn detection.  
+    **Data:** Botswana retail banking churn dataset (curated subset).
+    """
+)
+
+st.sidebar.info(
+    "Need support or have feedback? Drop a note to Heshan via your preferred channel."
+)
 
 # Load encoders
 marital_le = joblib.load("model/le_marital_status.pkl")
@@ -22,7 +42,12 @@ encoders = {
 }
 
 # Load model
-xgb_model = joblib.load("model/xgb_churn_model.pkl")
+model_path = Path("model/rf_churn_model.pkl")
+if not model_path.exists():
+    st.error("⚠️ Random Forest model artefact is missing. Please retrain via `notebooks/model_training.py`.")
+    st.stop()
+
+rf_model = joblib.load(model_path)
 
 # ─────────────────────────────────────────────────────────────
 # 🔍 Single Customer Prediction
@@ -65,18 +90,26 @@ input_df = pd.DataFrame({
 })
 
 if st.button("Predict Churn"):
-    prediction = xgb_model.predict(input_df)[0]
-    proba = xgb_model.predict_proba(input_df)[0][1]
+    prediction = rf_model.predict(input_df)[0]
+    proba = rf_model.predict_proba(input_df)[0][1]
     proba_percent = proba * 100
 
     st.write(f"🔢 Churn Probability: {proba_percent:.2f}%")
 
-    if proba_percent > 0.5:
+    if proba_percent > 50:
         st.error("⚠️ This customer is likely to churn.")
-    elif 0.4 < proba_percent <= 0.5:
+    elif 40 < proba_percent <= 50:
         st.warning("⚠️ This customer shows borderline churn risk.")
     else:
         st.success("✅ This customer is likely to stay.")
+
+    feature_labels = input_df.columns.tolist()
+    if hasattr(rf_model, "feature_importances_"):
+        importances = rf_model.feature_importances_
+        top_idx = np.argsort(importances)[::-1][:5]
+        st.write("#### 🔑 Top contributing features")
+        for rank, idx in enumerate(top_idx, start=1):
+            st.write(f"{rank}. **{feature_labels[idx]}** — importance score {importances[idx]:.3f}")
 
 # ─────────────────────────────────────────────────────────────
 # 📤 Batch Prediction
@@ -151,8 +184,8 @@ if uploaded_file:
     df = df.dropna(subset=numeric_cols)
 
     # Predict churn
-    predictions = xgb_model.predict(df)
-    probabilities = xgb_model.predict_proba(df)[:, 1]
+    predictions = rf_model.predict(df)
+    probabilities = rf_model.predict_proba(df)[:, 1]
 
     # Combine results
     df_result = df.copy()
@@ -183,12 +216,18 @@ if uploaded_file:
     )
 
     # Recalculate churners based on probability threshold
-    churn_threshold = 0.5
+    churn_threshold = 50
     churn_count = (df_result['Churn_Probability'] > churn_threshold).sum()
     total_count = len(df_result)
     churn_rate = churn_count / total_count if total_count > 0 else 0
 
     st.metric("Estimated Churn Rate", f"{churn_rate:.2%}", delta=f"{churn_count} likely churners out of {total_count}")
+
+    if hasattr(rf_model, "feature_importances_"):
+        importances = rf_model.feature_importances_
+        feature_series = pd.Series(importances, index=df.columns)
+        st.subheader("🌟 Feature Importance Snapshot")
+        st.bar_chart(feature_series.sort_values(ascending=False).head(10))
 
     # ─────────────────────────────────────────────────────────────
     # 📊 Dashboard Visuals

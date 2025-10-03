@@ -1,116 +1,42 @@
-# 🔍 Customer Churn Prediction – XGBoost Dashboard 
+# Customer Churn Prediction Platform
 
-This project delivers a stakeholder-facing churn prediction system using XGBoost. It includes data preprocessing, model training, fairness evaluation, batch and single prediction support, and an interactive Streamlit dashboard. Designed for clarity, reproducibility, and business impact.
+An interactive churn-analytics workflow maintained by **Heshan**, covering data preparation, model training, and a Streamlit-based decision-support dashboard. The repository bundles everything needed to retrain the model, validate the outputs, and deploy a lightweight web app for stakeholders.
 
----
+## Key Capabilities
+- 🧭 **Exploratory analysis** notebooks for profiling churn behaviour.
+- 🛠️ **Reproducible training script** (`notebooks/model_training.py`) that engineers features, tunes hyperparameters, and exports encoders/model artefacts.
+- 🖥️ **Streamlit application** (`app/app.py`) for single-customer scoring, batch uploads, and probability visualisation.
+- ✅ **Automated tests** (`tests/`) safeguarding encoder integrity, probability bounds, and batch prediction pipelines.
 
-## 📁 Project Structure
+## Quickstart
+```powershell
+# create environment (example using venv)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 
-│
+# install dependencies
+pip install -r requirements.txt
 
-├── app/
+# launch the Streamlit app
+streamlit run app/app.py
+```
 
-│       └── app.py              # Streamlit dashboard for predictions
+## Retraining the Model
+```powershell
+.venv\Scripts\Activate.ps1
+python notebooks/model_training.py
+```
+The script regenerates feature encoders under `model/` and exports the updated classifier (`xgb_churn_model.pkl`).
 
-│
+## Project Layout
+```
+app/          Streamlit UI for churn insights
+data/         Raw and feature-engineered datasets
+docs/         Supporting documentation
+model/        Serialized encoders and trained model
+notebooks/    EDA, feature engineering, and training workflows
+tests/        Pytest-based regression checks
+```
 
-├── data/
-
-│     ├── botswana_bank_customer_churn.csv    # Raw dataset
-
-│     └── final_feature.csv         # Preprocessed feature set
-
-│     └── test_batch.csv         # Sample batch input for testing
-
-│
-
-├── docs/
-
-│   └── FDM_MLB_G16-SOW.pdf     # Project scope and documentation
-
-│
-
-├── model/
-
-│   └── xgb_churn_model.pkl             # Trained XGBoost model
-
-│   ├── le_marital_status.pkl          # Label encoder for marital status
-
-│   ├── le_dependents.pkl              # Label encoder for dependents
-
-│   ├── le_occupation.pkl              # Label encoder for occupation
-
-│   ├── le_preferred_contact.pkl       # Label encoder for contact method
-
-│   └── le_segment.pkl                 # Label encoder for customer segment
-
-│
-
-├── notebooks/
-
-│   ├── FDM_mini_project.ipynb   # Exploratory analysis and pipeline overview
-
-│   └── model_training.py       # Scripted training pipeline
-
-│   └── model_comparison.ipynb     # Model evaluation and selection
-
-│
-
-├── tests/
-
-│   ├── test_batch_prediction.py       # Batch prediction test script
-
-│   └── test_encoders.py               # Encoder validation script
-
-│   └── test_single_prediction.py     # Single prediction test script
-
-│
-
-├── requirements.txt           # Dependencies
-
-└── README.md                     # You're reading it!
-
-│
-
----
-
-## ⚙️ Setup Instructions
-
-1. **Create and activate virtual environment**
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate
-   
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-
-3. **Train the model**
-   ```bash
-   python notebooks/model_training.py
-   
-4. **Run the dashboard**
-   ```bash
-   python -m streamlit run app/app.py
-
-5. **Run tests**
-   ```bash
-   pytest tests/
-
----
-
-## 📊 Features
-- ✅ Single and batch prediction support
-- ✅ Fallback logic for unknown labels ("other" category)
-- ✅ Churn probability with risk comments
-- ✅ Segment-wise churn breakdown and KPIs
-- ✅ Fairness evaluation using Fairlearn
-- ✅ Formal testing with pytest
-- ✅ Clean, reproducible pipeline and modular design
-
-## 🚀 Future Enhancements
-- RESTful API with FastAPI
-- Docker packaging and cloud deployment
-- Fairness-constrained model retraining
-- ROI estimation and trend analysis
-
+## Maintainer
+**Heshan** – data enthusiast focusing on customer retention analytics.
