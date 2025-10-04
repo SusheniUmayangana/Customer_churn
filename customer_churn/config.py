@@ -36,12 +36,12 @@ def get_settings() -> Settings:
     """Return cached settings derived from environment variables."""
 
     return Settings(
-        mongo_uri=os.getenv("MONGO_URI"),
-        mongo_db_name=os.getenv("MONGO_DB_NAME"),
-        jwt_secret=os.getenv("JWT_SECRET"),
-        jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
-        jwt_expires_minutes=int(os.getenv("JWT_EXPIRES_MINUTES", "60")),
-        environment=os.getenv("APP_ENV", "development"),
+        mongo_uri=st.secrets("MONGO_URI"),
+        mongo_db_name=st.secrets("MONGO_DB_NAME"),
+        jwt_secret=st.secrets("JWT_SECRET"),
+        jwt_algorithm=st.secrets("JWT_ALGORITHM", "HS256"),
+        jwt_expires_minutes=int(st.secrets("JWT_EXPIRES_MINUTES", "60")),
+        environment=st.secrets("APP_ENV", "development"),
     )
 
 
