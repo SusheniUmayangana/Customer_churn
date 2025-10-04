@@ -4,3 +4,11 @@ backgroundColor = "#F7FAFC"
 secondaryBackgroundColor = "#E2EEF8"
 textColor = "#0B1F33"
 font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[global]
+pythonPath = "customer_churn_prediction"
