@@ -1,49 +1,104 @@
 # 🔍 Customer Churn Prediction – XGBoost Dashboard 
 
-This project delivers a stakeholder-facing churn prediction system using XGBoost. It includes a reusable preprocessing pipeline, model training, batch and single prediction support, and an interactive Streamlit dashboard. Designed for clarity, reproducibility, and business impact.
+**Live Demo**: [Launch the Streamlit App](https://customerchurn-mxjnme2nlrphzcscndcm4h.streamlit.app/)
+
+A secure, stakeholder-facing churn prediction system powered by XGBoost and Streamlit. This dashboard supports batch and single predictions, integrates MongoDB Atlas for user authentication, and includes a reproducible preprocessing pipeline. Designed for clarity, robustness, and business impact.
+
 
 ---
 
+## 📘 Executive Summary
+
+This project helps businesses identify customers at risk of churn using a machine learning model trained on Botswana banking data. It features:
+
+- 🔐 Secure login via JWT and MongoDB
+- 📊 Interactive dashboard for churn prediction
+- 🧠 Reusable preprocessing pipeline and persisted model
+- 🧪 Automated tests for reliability and reproducibility
+
+Built for deployment on [Streamlit Cloud](https://streamlit.io/cloud), this app is modular, interpretable, and ready for stakeholder demos.
+
+---
+
+
 ## 📁 Project Structure
 
+
 │
 
-├── app/
-│       └── app.py              # Streamlit dashboard for predictions
-│
 ├── customer_churn/
+
 │       ├── __init__.py         # Package marker for imports
+
 │       ├── auth.py             # JWT helpers and credential management
+
 │       ├── config.py           # Environment variable loader
+
 │       ├── database.py         # MongoDB connection utilities
+
 │       └── preprocessing.py    # Shared preprocessing pipeline
+
 │
+
 ├── data/
+
 │       ├── botswana_bank_customer_churn.csv    # Raw dataset
+
+│       ├── final_feature.csv # Preprocessed feature set
+
 │       └── test_batch.csv                     # Sample batch input for testing
+
 │
+
 ├── docs/
+
 │       └── FDM_MLB_G16-SOW.pdf     # Project scope and documentation
+
 │
+
 ├── model/
+
 │       ├── preprocessor.joblib    # Persisted preprocessing pipeline
+
 │       └── xgb_churn_model.pkl    # Trained XGBoost model
+
 │
+
 ├── notebooks/
+
 │       ├── FDM_mini_project.ipynb   # Exploratory analysis and pipeline overview
+
+│       ├── model_training.py # Scripted training pipeline
+
 │       └── model_comparison.ipynb   # Model evaluation and selection
+
 │
+
 ├── scripts/
+
 │       └── train_model.py       # End-to-end training entry point
+
 │
+
 ├── tests/
+
 │       ├── conftest.py          # Test configuration for imports
-│       ├── test_batch_prediction.py
-│       ├── test_encoders.py
-│       └── test_single_prediction.py
+
+│       ├── test_batch_prediction.py # Batch prediction test script
+
+│       ├── test_encoders.py  # Encoder validation script
+
+│       └── test_single_prediction.py  # Single prediction test script
+
 │
+
+├── app.py              # Streamlit dashboard for predictions
+
 ├── requirements.txt           # Dependencies
-└── README.md                  # You're reading it!
+
+├── README.md                  # You're reading it!
+
+├── setup.sh                # Shell script
 
 └── .env.example               # Sample environment configuration for MongoDB/JWT
 
@@ -94,9 +149,22 @@ This project delivers a stakeholder-facing churn prediction system using XGBoost
 - ✅ Persisted XGBoost model and preprocessing artifacts for reproducible scoring
 - ✅ Automated regression tests covering preprocessing and inference flows
 
-## 🚀 Future Enhancements
-- RESTful API with FastAPI
-- Docker packaging and cloud deployment
-- Fairness-constrained model retraining
-- ROI estimation and trend analysis
+---
+
+## 🙋‍♀️ Contributors
+
+This project was developed as part of the **Year 3 Semester 2 – FDM Mini Project** by Group G16:
+
+- **IT23256378** – Kalubowila K. S. U  
+- **IT23209152** – Liyanage D. S  
+- **IT23242418** – Bogahawatta M. O  
+- **IT23232136** – Gunasekara P. A. H. I
+
+Third-year undergraduates at SLIIT, specializing in Data Science and committed to building secure, interpretable, and stakeholder-ready AI solutions.
+
+---
+
+## ✅ Project Status
+
+This dashboard is feature-complete and deployed. All core functionality—including secure login, batch/single prediction, and model reproducibility—is validated and ready for stakeholder demonstration.
 
