@@ -11,8 +11,11 @@ from pymongo.errors import PyMongoError
 from .config import get_settings
 from .database import get_collection
 
+# MongoDB collection name for storing user data
+
 USERS_COLLECTION = "users"
 
+# Retrieve the users collection from MongoDB
 
 def _get_users_collection() -> Collection:
     collection = get_collection(USERS_COLLECTION)
@@ -20,10 +23,12 @@ def _get_users_collection() -> Collection:
         raise RuntimeError("MongoDB connection is not configured. Set MONGO_URI and MONGO_DB_NAME.")
     return collection
 
+# Hash a plaintext password using bcrypt
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+# Verify a plaintext password against its hashed version
 
 def verify_password(password: str, hashed_password: str) -> bool:
     try:
@@ -31,16 +36,19 @@ def verify_password(password: str, hashed_password: str) -> bool:
     except ValueError:
         return False
 
+# Register a new user in the database
 
 def register_user(email: str, password: str, full_name: Optional[str] = None, plan: Optional[str] = None) -> Dict[str, Any]:
     email_normalised = email.strip().lower()
     plan_normalised = (plan or "free").strip().lower()
     collection = _get_users_collection()
 
+    # Check if user already exists
     existing = collection.find_one({"email": email_normalised})
     if existing:
         raise ValueError("A user with this email already exists.")
-
+    
+    # Create user document with hashed password and metadata
     user_document = {
         "email": email_normalised,
         "password_hash": hash_password(password),
@@ -57,6 +65,7 @@ def register_user(email: str, password: str, full_name: Optional[str] = None, pl
         "plan": plan_normalised,
     }
 
+# Authenticate user by verifying credentials
 
 def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     email_normalised = email.strip().lower()
@@ -73,12 +82,14 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     if not verify_password(password, password_hash):
         return None
 
+    # Prepare user object for return
     user_id = user.pop("_id", None)
     if user_id is not None:
         user["id"] = str(user_id)
     user.pop("password_hash", None)
     return user
 
+# Create a JWT access token for the authenticated user
 
 def create_access_token(user_id: str, email: str) -> str:
     settings = get_settings()
@@ -96,6 +107,7 @@ def create_access_token(user_id: str, email: str) -> str:
 
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
+# Decode a JWT token and return its payload
 
 def decode_token(token: str) -> Optional[Dict[str, Any]]:
     settings = get_settings()
@@ -108,6 +120,7 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
     except jwt.PyJWTError:
         return None
 
+# Retrieve the current user based on the provided JWT token
 
 def get_current_user(token: Optional[str]) -> Optional[Dict[str, Any]]:
     if not token:
@@ -135,6 +148,7 @@ def get_current_user(token: Optional[str]) -> Optional[Dict[str, Any]]:
     user.pop("password_hash", None)
     return user
 
+# Exported functions for external use
 
 __all__ = [
     "register_user",

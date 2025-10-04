@@ -9,6 +9,8 @@ import plotly.express as px
 import streamlit as st
 from pymongo.errors import PyMongoError
 
+# Import authentication and preprocessing modules
+
 from customer_churn.auth import (
     authenticate_user,
     create_access_token,
@@ -18,25 +20,33 @@ from customer_churn.auth import (
 from customer_churn.database import fetch_user_predictions, get_collection
 from customer_churn.preprocessing import ChurnPreprocessor
 
+# Optional PDF export support using WeasyPrint
+
 try:
     from weasyprint import HTML  # type: ignore
 except ImportError:  # pragma: no cover
     HTML = None
 
+# Risk thresholds and business constants
 
 HIGH_RISK_THRESHOLD = 0.5
 MEDIUM_RISK_THRESHOLD = 0.4
 AVERAGE_BALANCE_RISK_FACTOR = 0.12
 DEFAULT_CUSTOMER_VALUE = 600.0
 
+# Branding colors and styles
+
 BRAND_ACCENT = "#114B8B"
 BRAND_SECONDARY = "#F2B632"
 BRAND_BACKGROUND = "linear-gradient(120deg, rgba(17,75,139,0.92), rgba(14,114,149,0.88))"
+
+# MongoDB collection and token handling
 
 PREDICTIONS_COLLECTION = "predictions"
 TOKEN_QUERY_PARAM = "auth_token"
 PAID_PLANS = {"pro", "paid", "enterprise"}
 
+# Trigger a Streamlit rerun (compatible with legacy and current APIs)
 
 def rerun_app() -> None:
     """Trigger a Streamlit rerun compatible with new and legacy APIs."""
@@ -48,6 +58,7 @@ def rerun_app() -> None:
     else:  # pragma: no cover - defensive guard for future API changes
         raise RuntimeError("Streamlit rerun functionality is unavailable; refresh the page manually.")
 
+# Initialize default dashboard statistics
 
 def create_default_dashboard_stats() -> Dict[str, Any]:
     return {
@@ -57,6 +68,7 @@ def create_default_dashboard_stats() -> Dict[str, Any]:
         "revenue_at_risk": 0.0,
     }
 
+# Retrieve JWT token from query parameters
 
 def _get_query_token() -> Optional[str]:
     if hasattr(st, "query_params"):
@@ -74,6 +86,7 @@ def _get_query_token() -> Optional[str]:
         return value[0] if value else None
     return value
 
+# Set JWT token in query parameters
 
 def _set_query_token(token: Optional[str]) -> None:
     if hasattr(st, "query_params"):
@@ -93,6 +106,7 @@ def _set_query_token(token: Optional[str]) -> None:
         params.pop(TOKEN_QUERY_PARAM, None)
     st.experimental_set_query_params(**params)
 
+# Persist user authentication state in session
 
 def persist_auth_state(token: str, user: Dict[str, Any]) -> None:
     st.session_state["auth_token"] = token
@@ -100,18 +114,21 @@ def persist_auth_state(token: str, user: Dict[str, Any]) -> None:
     _set_query_token(token)
     load_user_history()
 
+# Clear user authentication state
 
 def clear_auth_state() -> None:
     st.session_state["auth_token"] = None
     st.session_state["current_user"] = None
     _set_query_token(None)
 
+# Check if user has access to premium recommendations
 
 def user_has_recommendation_access(user: Optional[Dict[str, Any]]) -> bool:
     if not user:
         return False
     return (user.get("plan") or "free").lower() in PAID_PLANS
 
+# Rebuild dashboard statistics from prediction history
 
 def rebuild_dashboard_stats_from_history(documents: List[Dict[str, Any]]) -> Dict[str, Any]:
     stats = create_default_dashboard_stats()
@@ -134,6 +151,7 @@ def rebuild_dashboard_stats_from_history(documents: List[Dict[str, Any]]) -> Dic
         stats["estimated_churn_rate"] = stats["total_high_risk"] / stats["total_customers"]
     return stats
 
+# Normalize prediction history documents for display
 
 def normalise_history_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
@@ -162,6 +180,7 @@ def normalise_history_documents(documents: List[Dict[str, Any]]) -> List[Dict[st
         entries.append(entry)
     return entries
 
+# Load prediction history for the current user and update dashboard stats
 
 def load_user_history(sync_stats: bool = True) -> None:
     user = st.session_state.get("current_user")
@@ -181,6 +200,7 @@ def load_user_history(sync_stats: bool = True) -> None:
 
     st.session_state["prediction_history"] = normalise_history_documents(documents)
 
+# Field configuration for Streamlit form layout
 
 FIELD_GROUPS: List[Dict[str, Any]] = [
     {
@@ -327,6 +347,7 @@ FIELD_GROUPS: List[Dict[str, Any]] = [
     },
 ]
 
+# Predefined customer templates for different business segments
 
 SEGMENT_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "Retail": {
@@ -385,6 +406,7 @@ SEGMENT_TEMPLATES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Business rule-based churn prevention suggestions
 
 SUGGESTION_RULES: List[Dict[str, Any]] = [
     {
@@ -413,6 +435,7 @@ SUGGESTION_RULES: List[Dict[str, Any]] = [
     },
 ]
 
+# Inject custom CSS styles into the Streamlit app for branding and layout
 
 def inject_global_styles() -> None:
     st.markdown(
@@ -477,6 +500,7 @@ def inject_global_styles() -> None:
         unsafe_allow_html=True,
     )
 
+# Load preprocessor and model artifacts from disk (cached for performance)
 
 @st.cache_resource(show_spinner=False)
 def load_artifacts() -> Any:
@@ -484,6 +508,7 @@ def load_artifacts() -> Any:
     model = joblib.load("model/xgb_churn_model.pkl")
     return preprocessor, model
 
+# Format display labels for select options
 
 def format_option(column: str, value: str) -> str:
     if column == "dependents" and value.isdigit():
@@ -492,6 +517,7 @@ def format_option(column: str, value: str) -> str:
         return "Unknown / Other"
     return value.replace("_", " ").title()
 
+# Render a select box using encoder classes
 
 def select_from_encoder(
     label: str,
@@ -505,6 +531,7 @@ def select_from_encoder(
     chosen_display = st.selectbox(label, display_options, index=index, help=help_text)
     return classes[display_options.index(chosen_display)]
 
+# Render a single input field based on its type
 
 def render_field(field: Dict[str, Any], values: Dict[str, Any]) -> None:
     column_name = field["column"]
@@ -550,6 +577,7 @@ def render_field(field: Dict[str, Any], values: Dict[str, Any]) -> None:
 
     values[column_name] = st.text_input(label, value=field.get("default", ""), help=help_text)
 
+# Build a dictionary of default values from field definitions
 
 def build_default_values() -> Dict[str, Any]:
     defaults: Dict[str, Any] = {}
@@ -558,6 +586,7 @@ def build_default_values() -> Dict[str, Any]:
             defaults[field["column"]] = field.get("default")
     return defaults
 
+# Retrieve a pre-filled template for a given customer segment
 
 def get_segment_template(segment: str) -> Dict[str, Any]:
     template = SEGMENT_TEMPLATES.get(segment, {})
@@ -565,6 +594,7 @@ def get_segment_template(segment: str) -> Dict[str, Any]:
     base.update(template)
     return base
 
+# Generate a user-friendly risk message based on churn probability
 
 def derive_risk_message(probability: float) -> str:
     if probability >= HIGH_RISK_THRESHOLD:
@@ -573,6 +603,7 @@ def derive_risk_message(probability: float) -> str:
         return "⚠️ Borderline churn risk"
     return "✅ Likely to stay"
 
+# Categorize churn risk into tiers
 
 def categorize_risk(probability: float) -> str:
     if probability >= HIGH_RISK_THRESHOLD:
@@ -581,6 +612,7 @@ def categorize_risk(probability: float) -> str:
         return "Medium"
     return "Low"
 
+# Estimate total revenue at risk based on high-risk predictions
 
 def estimate_revenue_at_risk(df: pd.DataFrame) -> float:
     if "probability" not in df.columns:
@@ -592,6 +624,7 @@ def estimate_revenue_at_risk(df: pd.DataFrame) -> float:
         return float(high_risk["balance"].fillna(0).sum() * AVERAGE_BALANCE_RISK_FACTOR)
     return float(len(high_risk) * DEFAULT_CUSTOMER_VALUE)
 
+# Reset session state for a new user or fresh dashboard
 
 def reset_user_state() -> None:
     st.session_state["dashboard_stats"] = create_default_dashboard_stats()
@@ -601,6 +634,7 @@ def reset_user_state() -> None:
     st.session_state["last_results_for_report"] = None
     st.session_state["prediction_history"] = []
 
+# Ensure all required session state keys are initialized
 
 def ensure_session_state() -> None:
     if "dashboard_stats" not in st.session_state:
@@ -615,6 +649,7 @@ def ensure_session_state() -> None:
     st.session_state.setdefault("auth_token", None)
     st.session_state.setdefault("current_user", None)
 
+# Initialize authentication state from session or query token
 
 def initialise_auth_state() -> None:
     token = st.session_state.get("auth_token")
@@ -635,12 +670,14 @@ def initialise_auth_state() -> None:
     elif token and st.session_state.get("current_user") and not st.session_state.get("prediction_history"):
         load_user_history()
 
+# Sign out the user and reset dashboard state
 
 def sign_out() -> None:
     clear_auth_state()
     reset_user_state()
     rerun_app()
 
+# Render sidebar with account info and sign-out option
 
 def render_account_sidebar() -> None:
     user = st.session_state.get("current_user")
@@ -663,6 +700,7 @@ def render_account_sidebar() -> None:
         if st.button("Sign out", width="stretch"):
             sign_out()
 
+# Render login/register interface and return True if authenticated
 
 def render_authentication_gate() -> bool:
     """Render authentication tabs and return True when the user is logged in."""
@@ -681,6 +719,8 @@ def render_authentication_gate() -> bool:
         return False
 
     login_column, register_column = st.columns(2)
+
+    # Login form
 
     with login_column:
         st.subheader("Sign in")
@@ -703,6 +743,8 @@ def render_authentication_gate() -> bool:
                     persist_auth_state(token, user)
                     st.success("Welcome back! Redirecting...")
                     rerun_app()
+
+    # Registration form
 
     with register_column:
         st.subheader("Register")
@@ -751,6 +793,7 @@ def render_authentication_gate() -> bool:
     st.info("Access is restricted to authorised bank personnel. Contact your administrator for assistance.")
     return False
 
+# Update dashboard statistics based on new prediction results
 
 def update_dashboard_stats(results_df: pd.DataFrame) -> None:
     if results_df.empty:
@@ -762,6 +805,7 @@ def update_dashboard_stats(results_df: pd.DataFrame) -> None:
     if stats["total_customers"]:
         stats["estimated_churn_rate"] = stats["total_high_risk"] / stats["total_customers"]
 
+# Render the hero section with dashboard metrics
 
 def render_hero() -> None:
     stats = st.session_state["dashboard_stats"]
@@ -780,6 +824,7 @@ def render_hero() -> None:
     m2.metric("Estimated Churn Rate", f"{churn_rate:.1%}")
     m3.metric("Projected Revenue at Risk", f"${stats['revenue_at_risk']:,.0f}")
 
+# Show unknown labels that were mapped to "other"
 
 def show_unknowns(metadata: Dict[str, List[str]]) -> None:
     if not metadata:
@@ -788,6 +833,7 @@ def show_unknowns(metadata: Dict[str, List[str]]) -> None:
         for column, values in metadata.items():
             st.write(f"**{column}** → {values}")
 
+# Generate churn prevention recommendations based on rules
 
 def generate_recommendations(row: Dict[str, Any], probability: float) -> List[Dict[str, str]]:
     recommendations: List[Dict[str, str]] = []
@@ -821,6 +867,7 @@ def generate_recommendations(row: Dict[str, Any], probability: float) -> List[Di
         )
     return recommendations
 
+# Render retention recommendation cards in a responsive layout
 
 def render_insight_cards(recommendations: List[Dict[str, str]]) -> None:
     if not recommendations:
@@ -841,6 +888,7 @@ def render_insight_cards(recommendations: List[Dict[str, str]]) -> None:
                 unsafe_allow_html=True,
             )
 
+# Render visual charts for segment-level churn insights
 
 def render_segment_charts(results: pd.DataFrame) -> None:
     if results.empty:
@@ -848,6 +896,8 @@ def render_segment_charts(results: pd.DataFrame) -> None:
     st.subheader("📈 Segment intelligence")
     results = results.copy()
     results["probability_percent"] = results["probability"] * 100
+
+    # Bar chart: churn probability by segment
 
     col1, col2 = st.columns(2)
     with col1:
@@ -862,6 +912,8 @@ def render_segment_charts(results: pd.DataFrame) -> None:
         )
         fig_segment.update_layout(legend_title_text="Risk tier")
     st.plotly_chart(fig_segment, width="stretch")
+
+    # Histogram: churn risk by tenure cohort
 
     with col2:
         results["tenure_bucket"] = pd.cut(
@@ -879,6 +931,8 @@ def render_segment_charts(results: pd.DataFrame) -> None:
         )
     st.plotly_chart(fig_tenure, width="stretch")
 
+    # Scatter plot: complaints vs churn probability
+
     fig_scatter = px.scatter(
         results,
         x="complaints_count",
@@ -891,6 +945,7 @@ def render_segment_charts(results: pd.DataFrame) -> None:
     )
     st.plotly_chart(fig_scatter, width="stretch")
 
+# Display upgrade prompt for locked features
 
 def render_upgrade_prompt(feature_label: str) -> None:
     st.info(
@@ -899,6 +954,7 @@ def render_upgrade_prompt(feature_label: str) -> None:
     button_key = f"upgrade_{feature_label.replace(' ', '_').lower()}"
     st.button("Explore plans", key=button_key, type="secondary")
 
+# Render summary table of risk tiers and recommended playbooks
 
 def render_risk_tables(results: pd.DataFrame) -> None:
     if results.empty:
@@ -940,6 +996,7 @@ def render_risk_tables(results: pd.DataFrame) -> None:
     )
     st.dataframe(styled, width="stretch")
 
+# Log a single prediction entry to MongoDB
 
 def log_single_prediction_entry(user: Dict[str, Any], inputs: Dict[str, Any], probability: float, risk_tier: str) -> None:
     collection = get_collection(PREDICTIONS_COLLECTION)
@@ -972,6 +1029,7 @@ def log_single_prediction_entry(user: Dict[str, Any], inputs: Dict[str, Any], pr
     else:
         load_user_history()
 
+# Log a batch prediction entry to MongoDB
 
 def log_batch_prediction_entry(user: Dict[str, Any], results: pd.DataFrame) -> None:
     if results.empty:
@@ -1008,6 +1066,7 @@ def log_batch_prediction_entry(user: Dict[str, Any], results: pd.DataFrame) -> N
     else:
         load_user_history()
 
+# Retrieve model and preprocessor metadata for audit display
 
 def get_model_metadata() -> Dict[str, str]:
     model_path = "model/xgb_churn_model.pkl"
@@ -1020,6 +1079,7 @@ def get_model_metadata() -> Dict[str, str]:
     metadata["Fairness assessment"] = "Refer to docs/model_comparison.ipynb"
     return metadata
 
+# Render audit and compliance panel with model provenance and validation rules
 
 def render_audit_panel() -> None:
     metadata = get_model_metadata()
@@ -1037,6 +1097,7 @@ def render_audit_panel() -> None:
         note = "Install `weasyprint` for PDF exports or integrate directly with enterprise reporting tools (Power BI / Tableau)."
         st.info(note)
 
+# Build HTML report for churn prediction summary
 
 def build_report_html(results: pd.DataFrame) -> str:
     stats = st.session_state["dashboard_stats"]
@@ -1071,6 +1132,7 @@ def build_report_html(results: pd.DataFrame) -> str:
     </html>
     """
 
+# Render workspace for relationship managers with PDF/HTML export
 
 def render_user_management(latest_results: Optional[pd.DataFrame]) -> None:
     st.subheader("🗂️ Relationship manager workspace")
@@ -1102,6 +1164,7 @@ def render_user_management(latest_results: Optional[pd.DataFrame]) -> None:
         )
         st.warning("Install `weasyprint` for direct PDF export: `pip install weasyprint`.")
 
+# Render single prediction input form and scoring logic
 
 def render_single_prediction_tab() -> pd.DataFrame:
     st.caption("Complete each section and submit to score an individual customer.")
@@ -1162,6 +1225,7 @@ def render_single_prediction_tab() -> pd.DataFrame:
     st.session_state["last_results_for_report"] = results
     return results
 
+# Render batch prediction tab with CSV upload and scoring
 
 def render_batch_tab(required_columns: List[str]) -> pd.DataFrame:
     st.markdown(
@@ -1225,11 +1289,14 @@ def render_batch_tab(required_columns: List[str]) -> pd.DataFrame:
     render_risk_tables(results)
     return results
 
+# Render the simulator tab for scenario analysis and stress testing
 
 def render_simulator_tab() -> None:
     st.markdown("Model alternative scenarios and stress-test retention strategies.")
     template_choice = st.selectbox("Persona template", options=list(SEGMENT_TEMPLATES.keys()))
     base_values = get_segment_template(template_choice)
+
+    # Optionally start from last scored customer
 
     if st.session_state.get("last_prediction"):
         if st.checkbox("Start from last scored customer", value=False):
@@ -1245,9 +1312,13 @@ def render_simulator_tab() -> None:
         step=500.0,
     )
 
+    # Editable fields for scenario simulation
+
     col4, col5 = st.columns(2)
     base_values["products_count"] = col4.slider("Products count", 1, 10, int(base_values.get("products_count", 2)))
     base_values["complaints_count"] = col5.slider("Complaints count", 0, 10, int(base_values.get("complaints_count", 0)))
+
+    # Run scenario analysis
 
     if st.button("Run scenario analysis"):
         scenario_df = pd.DataFrame([base_values])
@@ -1263,6 +1334,7 @@ def render_simulator_tab() -> None:
         else:
             render_upgrade_prompt("Scenario recommendations")
 
+# Render the history tab showing past predictions
 
 def render_history_tab() -> None:
     history: List[Dict[str, Any]] = st.session_state.get("prediction_history", [])
@@ -1384,6 +1456,7 @@ def render_history_tab() -> None:
     else:
         st.caption("No batch predictions recorded yet.")
 
+# Entry point for the Streamlit app
 
 def main() -> None:
     st.set_page_config(page_title="Bank Churn Intelligence", layout="wide")
@@ -1425,6 +1498,7 @@ def main() -> None:
     render_user_management(latest_results if isinstance(latest_results, pd.DataFrame) else None)
     render_audit_panel()
 
+# Run the app
 
 if __name__ == "__main__":
     main()

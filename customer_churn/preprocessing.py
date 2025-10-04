@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
+# Reference date used for age calculation
 
 _DATE_REFERENCE = pd.Timestamp("2024-01-01")
+
+# Standardized mapping for education levels
 
 _EDUCATION_SYNONYMS = {
     "bachelor": "bachelor",
@@ -22,6 +25,8 @@ _EDUCATION_SYNONYMS = {
     "masters": "master",
 }
 
+# Standardized mapping for occupation titles
+
 _OCCUPATION_SYNONYMS = {
     "accommodation manager": "accommodation manager",
     "accommodation manager¡": "accommodation manager",
@@ -31,6 +36,7 @@ _OCCUPATION_SYNONYMS = {
     "accountant, chartered certifie¡": "accountant, chartered certified",
 }
 
+# Convert string values to numeric, removing non-numeric characters
 
 def _to_numeric(series: pd.Series) -> pd.Series:
     """Convert heterogeneous numeric strings to floats."""
@@ -38,10 +44,12 @@ def _to_numeric(series: pd.Series) -> pd.Series:
     cleaned = cleaned.replace({"": np.nan, "nan": np.nan})
     return pd.to_numeric(cleaned, errors="coerce")
 
+# Standardize text by stripping whitespace and converting to lowercase
 
 def _standardize_text(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower().replace({"": np.nan, "nan": np.nan})
 
+# Preprocessing class for churn prediction
 
 @dataclass
 class ChurnPreprocessor:
@@ -76,14 +84,20 @@ class ChurnPreprocessor:
     fitted_: bool = field(default=False, init=False)
     feature_columns_: List[str] = field(default_factory=list, init=False)
 
+    # Convert column definitions to lists
+
     def __post_init__(self) -> None:
         self.categorical_columns = list(self.categorical_columns)
         self.numeric_columns = list(self.numeric_columns)
+
+    # Fit preprocessing logic to training data
 
     def fit(self, df: pd.DataFrame) -> pd.DataFrame:
         features, _ = self._prepare(df.copy(), fit=True, track_unknowns=False)
         self.fitted_ = True
         return features
+
+    # Transform new data using fitted preprocessing logic
 
     def transform(
         self, df: pd.DataFrame, track_unknowns: bool = False
@@ -97,12 +111,18 @@ class ChurnPreprocessor:
             return features, summary
         return features
 
+    # Fit and transform in one step
+
     def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:
         features = self.fit(df)
         return features
 
+    # Save the preprocessor object to disk
+
     def save(self, path: str) -> None:
         joblib.dump(self, path)
+
+    # Load a preprocessor object from disk
 
     @staticmethod
     def load(path: str) -> "ChurnPreprocessor":
@@ -114,6 +134,9 @@ class ChurnPreprocessor:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    
+    # Core preprocessing logic for both fit and transform
+
     def _prepare(
         self, df: pd.DataFrame, fit: bool, track_unknowns: bool
     ) -> Tuple[pd.DataFrame, Dict[str, List[str]]]:
@@ -201,6 +224,8 @@ class ChurnPreprocessor:
 
         return df[expected_columns], summary
 
+    # Basic cleaning: normalize column names, derive age, drop irrelevant fields
+
     def _basic_clean(self, df: pd.DataFrame) -> pd.DataFrame:
         df.columns = [re.sub(r"\s+", "_", col.strip().lower()) for col in df.columns]
 
@@ -221,6 +246,8 @@ class ChurnPreprocessor:
         df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors="ignore")
 
         return df
+
+    # Derive age from date of birth
 
     @staticmethod
     def _derive_age(value: object) -> float:

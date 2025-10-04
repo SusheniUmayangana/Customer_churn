@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 # Load environment variables from a local .env file when present.
 load_dotenv()
 
+# Define a frozen dataclass to hold application settings
 
 @dataclass(frozen=True)
 class Settings:
@@ -30,6 +31,7 @@ class Settings:
     def has_jwt_config(self) -> bool:
         return bool(self.jwt_secret)
 
+# Cache the settings object to avoid reloading secrets multiple times
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -44,5 +46,6 @@ def get_settings() -> Settings:
         environment=st.secrets.get("APP_ENV", "development"),
     )
 
+# Exported symbols for external use
 
 __all__ = ["Settings", "get_settings"]
