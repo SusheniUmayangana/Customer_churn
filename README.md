@@ -137,7 +137,7 @@ Built for deployment on [Streamlit Cloud](https://streamlit.io/cloud), this app 
 
 6. **Run the automated tests**
    ```powershell
-   pytest tests
+   python -m pytest tests/
    ```
 
 ---
