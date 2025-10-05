@@ -1278,22 +1278,22 @@ def render_batch_tab(required_columns: List[str]) -> pd.DataFrame:
         mime="text/csv",
     )
 
-    # Render per-customer recommendations for pro users
     user = st.session_state.get("current_user")
     if not results.empty:
         if user_has_recommendation_access(user):
-            st.subheader("Per-Customer Recommendations (Pro Feature)")
+            st.subheader("Per-Customer Recommendations")
             for idx, row in results.iterrows():
-                customer_label = (
-                    row.get("customer_id")
-                    or row.get("customer_name")
-                    or row.get("account_id")
-                    or row.get("email")
-                    or f"Customer {idx + 1} ({row.get('segment', 'Unknown')})"
-                )
-                recommendations = generate_recommendations(row.to_dict(), row["probability"])
-                st.markdown(f"**{customer_label} • {row['risk_tier']} Risk**")
-                render_insight_cards(recommendations)
+                if row['risk_tier'] == 'High':
+                    customer_label = (
+                        row.get("customer_id")
+                        or row.get("customer_name")
+                        or row.get("account_id")
+                        or row.get("email")
+                        or f"Customer {idx + 1} ({row.get('segment', 'Unknown')})"
+                    )
+                    recommendations = generate_recommendations(row.to_dict(), row["probability"])
+                    st.markdown(f"**{customer_label} • {row['risk_tier']} Risk**")
+                    render_insight_cards(recommendations)
         else:
             render_upgrade_prompt("Batch customer recommendations")
 
