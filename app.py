@@ -151,6 +151,7 @@ def rebuild_dashboard_stats_from_history(documents: List[Dict[str, Any]]) -> Dic
         stats["estimated_churn_rate"] = stats["total_high_risk"] / stats["total_customers"]
     return stats
 
+
 # Normalize prediction history documents for display
 
 def normalise_history_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -186,6 +187,7 @@ def load_user_history(sync_stats: bool = True) -> None:
     user = st.session_state.get("current_user")
     if not user:
         return
+    
 
     user_id = user.get("id")
     if not user_id:
@@ -347,8 +349,8 @@ FIELD_GROUPS: List[Dict[str, Any]] = [
     },
 ]
 
-# Predefined customer templates for different business segments
 
+# Predefined customer templates for different business segments
 SEGMENT_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "Retail": {
         "gender": "female",
@@ -407,7 +409,6 @@ SEGMENT_TEMPLATES: Dict[str, Dict[str, Any]] = {
 }
 
 # Business rule-based churn prevention suggestions
-
 SUGGESTION_RULES: List[Dict[str, Any]] = [
     {
         "title": "Offer refinance consultation",
@@ -501,7 +502,6 @@ def inject_global_styles() -> None:
     )
 
 # Load preprocessor and model artifacts from disk (cached for performance)
-
 @st.cache_resource(show_spinner=False)
 def load_artifacts() -> Any:
     preprocessor = ChurnPreprocessor.load("model/preprocessor.joblib")
