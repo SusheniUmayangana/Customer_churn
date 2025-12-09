@@ -889,7 +889,6 @@ def render_insight_cards(recommendations: List[Dict[str, str]]) -> None:
             )
 
 # Render visual charts for segment-level churn insights
-
 def render_segment_charts(results: pd.DataFrame) -> None:
     if results.empty:
         return
@@ -914,7 +913,6 @@ def render_segment_charts(results: pd.DataFrame) -> None:
     st.plotly_chart(fig_segment, width="stretch")
 
     # Histogram: churn risk by tenure cohort
-
     with col2:
         results["tenure_bucket"] = pd.cut(
             results["tenure_years"],
@@ -932,7 +930,6 @@ def render_segment_charts(results: pd.DataFrame) -> None:
     st.plotly_chart(fig_tenure, width="stretch")
 
     # Scatter plot: complaints vs churn probability
-
     fig_scatter = px.scatter(
         results,
         x="complaints_count",
@@ -946,7 +943,6 @@ def render_segment_charts(results: pd.DataFrame) -> None:
     st.plotly_chart(fig_scatter, width="stretch")
 
 # Display upgrade prompt for locked features
-
 def render_upgrade_prompt(feature_label: str) -> None:
     st.info(
         f"🔒 {feature_label} is included with Pro plans. Upgrade to unlock tailored recommendations, advanced playbooks, and executive-ready insights.",
@@ -955,7 +951,6 @@ def render_upgrade_prompt(feature_label: str) -> None:
     st.button("Explore plans", key=button_key, type="secondary")
 
 # Render summary table of risk tiers and recommended playbooks
-
 def render_risk_tables(results: pd.DataFrame) -> None:
     if results.empty:
         return
